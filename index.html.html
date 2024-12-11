@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>채용 여부 확인 및 수정</title>
+    <style>
+        #suggestions {
+            border: 1px solid #ddd;
+            max-width: 300px;
+            padding: 10px;
+            list-style: none;
+        }
+        #suggestions li {
+            padding: 5px;
+            cursor: pointer;
+        }
+        #suggestions li:hover {
+            background-color: #f0f0f0;
+        }
+        #loginContainer {
+            display: block;
+        }
+        #appContainer {
+            display: none;
+        }
+        #editForm, #addPersonForm, #editLocationsForm {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="loginContainer">
+        <h1>로그인</h1>
+        <p>사용자 ID와 암호를 입력하세요:</p>
+        <input type="text" id="userId" placeholder="ID 입력" onkeydown="enterToLogin(event)" />
+        <input type="password" id="password" placeholder="암호 입력" onkeydown="enterToLogin(event)" />
+        <button onclick="authenticate()">로그인</button>
+    </div>
+
+    <div id="appContainer">
+        <h1>채용 여부 확인</h1>
+        <button onclick="logout()">로그아웃</button>
+        <input type="text" id="searchBox" placeholder="검색어를 입력하세요" oninput="showSuggestions()" onkeydown="enterToSearch(event)" />
+        <button onclick="search()">검색</button>
+
+        <ul id="suggestions"></ul>
+
+        <h2 id="resultTitle"></h2>
+        <div id="resultDetails"></div>
+
+        <!-- 관리자만 보이는 버튼 -->
+        <button id="addPersonButton" style="display:none;" onclick="enableAddPerson()">인물 추가</button>
+        <button id="editLocationsButton" style="display:none;" onclick="enableEditLocations()">현장 수정</button>
+
+        <!-- 수정 폼 -->
+        <div id="editForm">
+            <h3>정보 수정</h3>
+            <p>이름: <input type="text" id="editName" disabled /></p>
+            <p>생년월일: <input type="date" id="editBirthDate" /></p>
+            <p>현장: 
+                <select id="editLocation">
+                    <!-- 옵션은 스크립트에서 동적으로 추가됨 -->
+                </select>
+            </p>
+            <p>
+                채용 가능 여부: 
+                <select id="editHireable" onchange="toggleReason()">
+                    <option value="Y">Y</option>
+                    <option value="N">N</option>
+                </select>
+            </p>
+            <p>사유: <input type="text" id="editReason" disabled /></p>
+            <button onclick="saveChanges()">수정 완료</button>
+            <button onclick="cancelEdit()">취소</button>
+        </div>
+
+        <!-- 인물 추가 폼 -->
+        <div id="addPersonForm">
+            <h3>새 인물 추가</h3>
+            <p>이름: <input type="text" id="newName" /></p>
+            <p>생년월일: <input type="date" id="newBirthDate" /></p>
+            <p>현장: 
+                <select id="newLocation">
+                    <!-- 옵션은 스크립트에서 동적으로 추가됨 -->
+                </select>
+            </p>
+            <p>
+                채용 가능 여부: 
+                <select id="newHireable" onchange="toggleNewReason()">
+                    <option value="Y">Y</option>
+                    <option value="N">N</option>
+                </select>
+            </p>
+            <p>사유: <input type="text" id="newReason" disabled /></p>
+            <button onclick="saveNewPerson()">추가 완료</button>
+            <button onclick="cancelAddPerson()">취소</button>
+        </div>
+
+        <!-- 현장 수정 폼 -->
+        <div id="editLocationsForm">
+            <h3>현장 수정</h3>
+            <ul id="locationsList"></ul>
+            <input type="text" id="newLocationInput" placeholder="새 현장 추가" />
+            <button onclick="addLocation()">현장 추가</button>
+            <button onclick="saveLocations()">저장</button>
+            <button onclick="cancelEditLocations()">취소</button>
+        </div>
+    </div>
+
+    <script>
+        const users = [
+            { id: "ryujiyun", password: "dearyu", role: "admin" },
+            { id: "HBD", password: "HBD", role: "viewer" }
+        ];
+
+        const locations = ["서울 공장", "부산 창고", "인천 물류센터"];
+
+        const data = [
+            { name: "박성범", birthDate: "1993-06-15", location: "서울 공장", hireable: "Y", reason: "", file: "https://example.com/park_file" },
+            { name: "김철수", birthDate: "1998-02-10", location: "부산 창고", hireable: "N", reason: "기술 부족", file: "https://example.com/kim_file" },
+            { name: "이영희", birthDate: "1995-11-20", location: "인천 물류센터", hireable: "Y", reason: "", file: "https://example.com/lee_file" }
+        ];
+
+        let currentUser = null;
+        let currentEdit = null;
+
+        function authenticate() {
+            const inputId = document.getElementById('userId').value;
+            const inputPassword = document.getElementById('password').value;
+
+            const matchedUser = users.find(user => user.id === inputId && user.password === inputPassword);
+
+            if (matchedUser) {
+                currentUser = matchedUser;
+                alert("로그인 성공!");
+                document.getElementById('loginContainer').style.display = "none";
+                document.getElementById('appContainer').style.display = "block";
+
+                // 관리자와 뷰어에 따라 버튼 활성화 설정
+                if (currentUser.role === "admin") {
+                    document.getElementById("addPersonButton").style.display = "block";
+                    document.getElementById("editLocationsButton").style.display = "block";
+                } else {
+                    document.getElementById("addPersonButton").style.display = "none";
+                    document.getElementById("editLocationsButton").style.display = "none";
+                }
+            } else {
+                alert("ID 또는 암호가 올바르지 않습니다.");
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('loginContainer').style.display = "block";
+            document.getElementById('appContainer').style.display = "none";
+            document.getElementById('searchBox').value = ""; // 검색 기록 초기화
+            alert("로그아웃 되었습니다.");
+        }
+
+        function enterToLogin(event) {
+            if (event.key === "Enter") {
+                authenticate();
+            }
+        }
+
+        function enterToSearch(event) {
+            if (event.key === "Enter") {
+                search();
+            }
+        }
+
+        function closeAllForms() {
+            document.getElementById('editForm').style.display = "none";
+            document.getElementById('addPersonForm').style.display = "none";
+            document.getElementById('editLocationsForm').style.display = "none";
+        }
+
+        function populateDropdowns() {
+            const editLocationDropdown = document.getElementById('editLocation');
+            const newLocationDropdown = document.getElementById('newLocation');
+
+            editLocationDropdown.innerHTML = '';
+            newLocationDropdown.innerHTML = '';
+
+            locations.forEach(location => {
+                const option1 = document.createElement('option');
+                const option2 = document.createElement('option');
+                option1.value = location;
+                option1.textContent = location;
+                option2.value = location;
+                option2.textContent = location;
+                editLocationDropdown.appendChild(option1);
+                newLocationDropdown.appendChild(option2);
+            });
+        }
+
+        function enableEditLocations() {
+            closeAllForms();
+            const locationsList = document.getElementById('locationsList');
+            locationsList.innerHTML = '';
+
+            locations.forEach((location, index) => {
+                const li = document.createElement('li');
+                li.textContent = location;
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = "삭제";
+                deleteButton.onclick = () => removeLocation(index);
+                li.appendChild(deleteButton);
+                locationsList.appendChild(li);
+            });
+
+            document.getElementById('editLocationsForm').style.display = "block";
+        }
+
+        function addLocation() {
+            const newLocation = document.getElementById('newLocationInput').value;
+            if (newLocation && !locations.includes(newLocation)) {
+                locations.push(newLocation);
+                alert("새 현장이 추가되었습니다!");
+                enableEditLocations();
+            }
+        }
+
+        function removeLocation(index) {
+            locations.splice(index, 1);
+            enableEditLocations();
+        }
+
+        function saveLocations() {
+            populateDropdowns();
+            alert("현장 목록이 저장되었습니다.");
+            document.getElementById('editLocationsForm').style.display = "none";
+        }
+
+        function cancelEditLocations() {
+            document.getElementById('editLocationsForm').style.display = "none";
+        }
+
+        function showSuggestions() {
+            const searchInput = document.getElementById('searchBox').value.toLowerCase();
+            const suggestions = document.getElementById('suggestions');
+            suggestions.innerHTML = '';
+
+            if (searchInput) {
+                const matches = data.filter(item => item.name.toLowerCase().includes(searchInput));
+                matches.forEach(match => {
+                    const li = document.createElement('li');
+                    li.textContent = match.name;
+                    li.onclick = () => {
+                        document.getElementById('searchBox').value = match.name;
+                        suggestions.innerHTML = '';
+                    };
+                    suggestions.appendChild(li);
+                });
+            }
+        }
+
+        function search() {
+            const searchInput = document.getElementById('searchBox').value.toLowerCase();
+            const resultDetails = document.getElementById('resultDetails');
+            const resultTitle = document.getElementById('resultTitle');
+            resultDetails.innerHTML = '';
+            resultTitle.innerHTML = '';
+
+            const match = data.find(item => item.name.toLowerCase() === searchInput);
+            if (!match) {
+                resultTitle.textContent = "검색결과가 없습니다.";
+                return;
+            }
+
+            currentEdit = match;
+            resultTitle.textContent = `${match.name}님의 정보`;
+            resultDetails.innerHTML = `
+                <p>생년월일: ${match.birthDate}</p>
+                <p>현장: ${match.location}</p>
+                <p>채용 가능 여부: ${match.hireable}</p>
+                ${match.hireable === "N" ? `<p>사유: ${match.reason}</p>` : ""}
+                ${currentUser.role === "admin" ? '<button onclick="enableEdit()">수정</button>' : ''}
+            `;
+        }
+
+        function enableEdit() {
+            closeAllForms();
+            document.getElementById('editForm').style.display = "block";
+            document.getElementById('editName').value = currentEdit.name;
+            document.getElementById('editBirthDate').value = currentEdit.birthDate;
+            document.getElementById('editLocation').value = currentEdit.location;
+            document.getElementById('editHireable').value = currentEdit.hireable;
+            document.getElementById('editReason').value = currentEdit.reason;
+            toggleReason();
+        }
+
+        function saveChanges() {
+            currentEdit.birthDate = document.getElementById('editBirthDate').value;
+            currentEdit.location = document.getElementById('editLocation').value;
+            currentEdit.hireable = document.getElementById('editHireable').value;
+            currentEdit.reason = currentEdit.hireable === "N" ? document.getElementById('editReason').value : "";
+
+            alert("정보가 수정되었습니다!");
+            document.getElementById('editForm').style.display = "none";
+            search(); // 수정된 내용 갱신
+        }
+
+        function cancelEdit() {
+            document.getElementById('editForm').style.display = "none";
+        }
+
+        function enableAddPerson() {
+            closeAllForms();
+            document.getElementById('addPersonForm').style.display = "block";
+        }
+
+        function saveNewPerson() {
+            const newName = document.getElementById('newName').value;
+            const newBirthDate = document.getElementById('newBirthDate').value;
+            const newLocation = document.getElementById('newLocation').value;
+            const newHireable = document.getElementById('newHireable').value;
+            const newReason = document.getElementById('newReason').value;
+
+            if (!newName || !newBirthDate || !newLocation) {
+                alert("모든 필드를 입력해주세요.");
+                return;
+            }
+
+            data.push({ 
+                name: newName, 
+                birthDate: newBirthDate, 
+                location: newLocation, 
+                hireable: newHireable, 
+                reason: newHireable === "N" ? newReason : "", 
+                                file: ""
+            });
+
+            alert("새 인물이 추가되었습니다!");
+            document.getElementById('addPersonForm').style.display = "none";
+        }
+
+        function cancelAddPerson() {
+            document.getElementById('addPersonForm').style.display = "none";
+        }
+
+        function toggleReason() {
+            const hireable = document.getElementById('editHireable').value;
+            document.getElementById('editReason').disabled = hireable === "Y";
+        }
+
+        function toggleNewReason() {
+            const hireable = document.getElementById('newHireable').value;
+            document.getElementById('newReason').disabled = hireable === "Y";
+        }
+    </script>
+</body>
+</html>
+
